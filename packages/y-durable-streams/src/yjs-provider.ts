@@ -722,16 +722,19 @@ export class YjsProvider extends ObservableV2<YjsProviderEvents> {
    * Track what the server holds, from the bytes it sends us.
    */
   private recordServerUpdate(ctx: ConnectionContext, update: Uint8Array): void {
-    const sv = Y.decodeStateVector(Y.encodeStateVectorFromUpdate(update))
-    for (const [client, clock] of sv) {
-      if (clock > (ctx.serverStateVector.get(client) ?? 0)) {
-        ctx.serverStateVector.set(client, clock)
+    const { structs, ds } = Y.decodeUpdate(update)
+    // Extend each client's clock only through contiguous structs, so a gap in
+    // what the server sent never counts as covered. (encodeStateVectorFromUpdate
+    // cannot be used here: it ignores clients whose structs don't start at 0.)
+    for (const struct of structs) {
+      if (struct instanceof Y.Skip) continue
+      const { client, clock } = struct.id
+      const end = ctx.serverStateVector.get(client) ?? 0
+      if (clock <= end && clock + struct.length > end) {
+        ctx.serverStateVector.set(client, clock + struct.length)
       }
     }
-    ctx.serverDeleteSet = Y.mergeDeleteSets([
-      ctx.serverDeleteSet,
-      Y.decodeUpdate(update).ds,
-    ])
+    ctx.serverDeleteSet = Y.mergeDeleteSets([ctx.serverDeleteSet, ds])
   }
 
   /**

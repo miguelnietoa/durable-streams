@@ -976,8 +976,17 @@ describe(`Yjs Durable Streams Protocol`, () => {
           const provider1 = await createProviderWithDoc(docId, { doc: doc1 })
           await waitForSync(provider1)
 
+          // Several edits so the client's later structs arrive in updates that
+          // do not start at clock 0
           const map1 = doc1.getMap(`answers`)
           map1.set(`q1`, `online`)
+          await waitForCondition(() => provider1.synced, {
+            label: `provider1 synced after first edit`,
+          })
+          map1.set(`q2`, `online`)
+          await waitForCondition(() => provider1.synced, {
+            label: `provider1 synced after second edit`,
+          })
           map1.delete(`q1`)
           await waitForCondition(() => provider1.synced, {
             label: `provider1 synced after delete`,
